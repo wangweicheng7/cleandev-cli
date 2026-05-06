@@ -33,6 +33,7 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 	fs.Var(discoverRoots, "discover-roots", "comma-separated roots for project discovery (default ~/Code,~/Projects,~/workspace)")
 	discoverDepth := fs.Int("discover-depth", 4, "max directory depth for project discovery")
 	discoverRefresh := fs.Bool("discover-refresh", false, "force refresh project discovery cache")
+	discoverDebug := fs.Bool("discover-debug", false, "print project discovery debug logs")
 
 	dryRun := fs.Bool("dry-run", false, "preview actions without deleting")
 	confirm := fs.Bool("confirm", false, "execute deletion (required unless --dry-run)")
@@ -79,6 +80,7 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 	}
 
 	var selectedIDs []string
+	var discoverLogs []string
 	if *interactive {
 		plan, err := clean.BuildPlan(ctx, clean.ScanOptions{
 			Profile:    p,
@@ -90,6 +92,8 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 				Roots:    splitCSV(discoverRoots.v),
 				MaxDepth: *discoverDepth,
 				Refresh:  *discoverRefresh,
+				Debug:    *discoverDebug,
+				DebugLogs: &discoverLogs,
 			},
 		})
 		if err != nil {
@@ -125,6 +129,8 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 			Roots:    splitCSV(discoverRoots.v),
 			MaxDepth: *discoverDepth,
 			Refresh:  *discoverRefresh,
+			Debug:    *discoverDebug,
+			DebugLogs: &discoverLogs,
 		},
 	})
 	if err != nil {
@@ -137,6 +143,11 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(res)
 		return 0
+	}
+	if *discoverDebug {
+		for _, l := range discoverLogs {
+			fmt.Fprintf(errOut, "[discover] %s\n", l)
+		}
 	}
 
 	if res.DryRun {

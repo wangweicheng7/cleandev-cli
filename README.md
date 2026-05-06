@@ -36,6 +36,12 @@ go run ./cmd/devclean clean --profile dev --confirm
 make brew-formula-update TAG=v0.2.0
 ```
 
+并可一键提交并推送到 tap 仓库：
+
+```bash
+make brew-formula-publish
+```
+
 推荐安装方式（已 tap 后使用简写）：
 
 ```bash
@@ -84,6 +90,8 @@ devclean scan --discover-projects --discover-roots ~/Code,~/Projects --with-size
 devclean clean --discover-projects --discover-roots ~/Code,~/Projects --dry-run
 # 强制刷新发现缓存
 devclean scan --discover-projects --discover-refresh
+# 查看发现调试日志
+devclean scan --discover-projects --discover-debug
 ```
 
 ## 配置文件（可选）

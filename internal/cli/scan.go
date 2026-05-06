@@ -34,6 +34,7 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	fs.Var(discoverRoots, "discover-roots", "comma-separated roots for project discovery (default ~/Code,~/Projects,~/workspace)")
 	discoverDepth := fs.Int("discover-depth", 4, "max directory depth for project discovery")
 	discoverRefresh := fs.Bool("discover-refresh", false, "force refresh project discovery cache")
+	discoverDebug := fs.Bool("discover-debug", false, "print project discovery debug logs")
 
 	asJSON := fs.Bool("json", false, "output as json")
 
@@ -73,6 +74,7 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 		catSet = nil
 	}
 
+	var discoverLogs []string
 	plan, err := clean.BuildPlan(ctx, clean.ScanOptions{
 		Profile:    p,
 		Categories: catSet,
@@ -83,6 +85,8 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 			Roots:    splitCSV(discoverRoots.v),
 			MaxDepth: *discoverDepth,
 			Refresh:  *discoverRefresh,
+			Debug:    *discoverDebug,
+			DebugLogs: &discoverLogs,
 		},
 	})
 	if err != nil {
@@ -99,6 +103,11 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(plan)
 		return 0
+	}
+	if *discoverDebug {
+		for _, l := range discoverLogs {
+			fmt.Fprintf(errOut, "[discover] %s\n", l)
+		}
 	}
 
 	printPlanTable(out, plan)

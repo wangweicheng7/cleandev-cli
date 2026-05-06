@@ -3,6 +3,7 @@ package clean
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,8 @@ type DiscoverOptions struct {
 	MaxDepth int
 	Refresh  bool
 	CacheTTL time.Duration
+	Debug    bool
+	DebugLogs *[]string
 }
 
 type discoveredProject struct {
@@ -39,6 +42,7 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 	}
 
 	roots := normalizeDiscoverRoots(home, opts.Roots)
+	discoverLog(&opts, "discover enabled=true roots=%v max_depth=%d refresh=%t", roots, maxDepth, opts.Refresh)
 	ttl := opts.CacheTTL
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
@@ -46,16 +50,20 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 
 	if !opts.Refresh {
 		if cached, ok := loadDiscoveryCache(home, roots, maxDepth, ttl); ok {
+			discoverLog(&opts, "cache hit: %d projects", len(cached))
 			// prune missing paths so cache heals itself when projects disappear
 			var alive []discoveredProject
 			for _, p := range cached {
 				if st, err := os.Stat(p.Root); err == nil && st.IsDir() {
 					alive = append(alive, p)
+				} else {
+					discoverLog(&opts, "cache prune missing: %s", p.Root)
 				}
 			}
 			_ = saveDiscoveryCache(home, roots, maxDepth, alive)
 			return alive, nil
 		}
+		discoverLog(&opts, "cache miss")
 	}
 
 	seen := map[string]bool{}
@@ -64,8 +72,10 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 	for _, root := range roots {
 		info, err := os.Stat(root)
 		if err != nil || !info.IsDir() {
+			discoverLog(&opts, "skip root (missing/not dir): %s", root)
 			continue
 		}
+		discoverLog(&opts, "scan root: %s", root)
 
 		err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -100,6 +110,7 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 						Root: cleaned,
 						Name: filepath.Base(cleaned),
 					})
+					discoverLog(&opts, "found project: %s", cleaned)
 				}
 				return filepath.SkipDir
 			}
@@ -111,6 +122,7 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 	}
 
 	_ = saveDiscoveryCache(home, roots, maxDepth, out)
+	discoverLog(&opts, "discover complete: %d projects", len(out))
 	return out, nil
 }
 
@@ -292,5 +304,12 @@ func sameStringSlice(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func discoverLog(opts *DiscoverOptions, format string, args ...interface{}) {
+	if opts == nil || !opts.Debug || opts.DebugLogs == nil {
+		return
+	}
+	*opts.DebugLogs = append(*opts.DebugLogs, fmt.Sprintf(format, args...))
 }
 

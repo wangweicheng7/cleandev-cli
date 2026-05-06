@@ -2,7 +2,7 @@ BINARY_NAME ?= devclean
 PKG ?= ./...
 FORMULA_PATH ?= homebrew-tap/Formula/devclean-cli.rb
 
-.PHONY: fmt test build run install-user uninstall-user brew-formula-update brew-install-local sha256-url
+.PHONY: fmt test build run install-user uninstall-user brew-formula-update brew-formula-publish brew-install-local sha256-url
 
 fmt:
 	go fmt $(PKG)
@@ -36,6 +36,9 @@ sha256-url:
 brew-formula-update:
 	@if [ -z "$${TAG:-}" ]; then echo "usage: make brew-formula-update TAG=v0.1.0" >&2; exit 2; fi
 	bash scripts/update_formula_from_tag.sh "$${TAG}"
+
+brew-formula-publish:
+	bash scripts/publish_formula_to_tap.sh
 
 brew-install-local:
 	@echo "brew install from local formula file: $(FORMULA_PATH)" >&2
