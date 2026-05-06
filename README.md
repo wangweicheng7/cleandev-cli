@@ -26,12 +26,20 @@ go run ./cmd/cleandev clean --profile dev --confirm
 - `sha256`
 - `version`
 
-替换为对应 release 的值，然后将 formula 推到独立 tap 仓库（例如 `wangweicheng7/homebrew-tap`）。注意：formula 名为 `devclean-cli`，因此安装命令是 `brew install devclean-cli`：
+替换为对应 release 的值，然后将 formula 推到独立 tap 仓库（例如 `wangweicheng7/homebrew-tap`）。
+
+推荐安装方式（已 tap 后使用简写）：
 
 ```bash
 brew tap wangweicheng7/homebrew-tap
 brew install devclean-cli
 devclean doctor
+```
+
+如果需要排障，可使用全限定写法：
+
+```bash
+brew install wangweicheng7/homebrew-tap/devclean-cli
 ```
 
 ## 可选：添加短别名 `dcl`
