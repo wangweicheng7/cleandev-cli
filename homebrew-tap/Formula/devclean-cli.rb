@@ -21,4 +21,3 @@ class DevcleanCli < Formula
     system "#{bin}/devclean", "doctor"
   end
 end
-

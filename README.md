@@ -30,6 +30,12 @@ go run ./cmd/devclean clean --profile dev --confirm
 
 替换为对应 release 的值，然后将 formula 推到独立 tap 仓库（例如 `wangweicheng7/homebrew-tap`）。
 
+可使用脚本自动更新 formula（从 release 的 `checksums.txt` 读取 arm64/amd64 校验）：
+
+```bash
+make brew-formula-update TAG=v0.2.0
+```
+
 推荐安装方式（已 tap 后使用简写）：
 
 ```bash

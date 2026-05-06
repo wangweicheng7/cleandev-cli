@@ -9,29 +9,54 @@ fi
 
 REPO="wangweicheng7/devclean-cli"
 FORMULA_FILE="homebrew-tap/Formula/devclean-cli.rb"
+VERSION="${TAG#v}"
+CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${TAG}/checksums.txt"
+ARM_URL="https://github.com/${REPO}/releases/download/${TAG}/devclean_${VERSION}_darwin_arm64.tar.gz"
+AMD_URL="https://github.com/${REPO}/releases/download/${TAG}/devclean_${VERSION}_darwin_amd64.tar.gz"
 
-URL="https://github.com/${REPO}/archive/refs/tags/${TAG}.tar.gz"
-TMP_TAR="$(mktemp -t devclean-cli.XXXXXX.tar.gz)"
-
-cleanup() {
-  rm -f "${TMP_TAR}"
-}
+TMP_CHECKSUMS="$(mktemp -t devclean-checksums.XXXXXX.txt)"
+cleanup() { rm -f "${TMP_CHECKSUMS}"; }
 trap cleanup EXIT
 
-echo "downloading: ${URL}" >&2
-curl -L -o "${TMP_TAR}" "${URL}"
+echo "downloading checksums: ${CHECKSUMS_URL}" >&2
+curl -L -o "${TMP_CHECKSUMS}" "${CHECKSUMS_URL}"
 
-SHA="$(shasum -a 256 "${TMP_TAR}" | awk '{print $1}')"
+ARM_SHA="$(awk '/devclean_'"${VERSION}"'_darwin_arm64\.tar\.gz$/ {print $1}' "${TMP_CHECKSUMS}")"
+AMD_SHA="$(awk '/devclean_'"${VERSION}"'_darwin_amd64\.tar\.gz$/ {print $1}' "${TMP_CHECKSUMS}")"
 
-# Update formula fields:
-# - version "..."
-# - url "..."
-# - sha256 "..."
-#
-# We use slurp mode to safely replace the url+sha256 pair with an explicit newline.
-perl -0777 -pi -e "s/^\\s*version\\s+\"[^\"]*\"\\s*$/  version \"${TAG}\"/m; s/^\\s*url\\s+\"[^\"]*\"\\s*\\n\\s*sha256\\s+\"[^\"]*\"\\s*$/  url \"${URL}\"\\n  sha256 \"${SHA}\"/m" "${FORMULA_FILE}"
+if [[ -z "${ARM_SHA}" || -z "${AMD_SHA}" ]]; then
+  echo "failed to parse checksums.txt for version ${VERSION}" >&2
+  exit 1
+fi
+
+cat > "${FORMULA_FILE}" <<EOF
+class DevcleanCli < Formula
+  desc "macOS developer cleanup CLI (safe-first)"
+  homepage "https://github.com/${REPO}"
+  version "${VERSION}"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "${ARM_URL}"
+      sha256 "${ARM_SHA}"
+    else
+      url "${AMD_URL}"
+      sha256 "${AMD_SHA}"
+    end
+  end
+
+  def install
+    bin.install "devclean"
+  end
+
+  test do
+    system "#{bin}/devclean", "doctor"
+  end
+end
+EOF
 
 echo "updated ${FORMULA_FILE}" >&2
-echo "version: ${TAG}" >&2
-echo "sha256: ${SHA}" >&2
+echo "version: ${VERSION}" >&2
+echo "arm64 sha256: ${ARM_SHA}" >&2
+echo "amd64 sha256: ${AMD_SHA}" >&2
 
