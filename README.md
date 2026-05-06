@@ -8,6 +8,7 @@
 - `clean --dry-run`：仅预览，不会删除任何文件。
 - `clean --confirm`：显式确认后执行删除。
 - `clean --interactive`：逐项交互确认清理对象。
+- `scan/clean --discover-projects`：自动发现开发工程目录，并纳入工程垃圾目录（如 `node_modules`、`dist`、`build`、`.dart_tool`、`ios/Pods`、`android/.gradle`）。
 - `profile` 分层：`safe` / `dev` / `aggressive`（高风险项默认 `report_only`）。
 
 ## 快速开始（本地运行）
@@ -68,6 +69,13 @@ source ~/.bashrc
 - `devclean clean [--dry-run] [--confirm] [--interactive] [--profile ...] [--category ...] [--json]`
 - `devclean config init [--path .devcleanrc.json] [--force]`
 - `devclean doctor`
+
+示例（扫描常见代码目录中的工程垃圾）：
+
+```bash
+devclean scan --discover-projects --discover-roots ~/Code,~/Projects --with-size
+devclean clean --discover-projects --discover-roots ~/Code,~/Projects --dry-run
+```
 
 ## 配置文件（可选）
 

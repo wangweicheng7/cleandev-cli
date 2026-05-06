@@ -16,6 +16,7 @@ type ExecuteOptions struct {
 	RepoRoot string
 	TargetIDs []string // nil/empty => all executable items
 	ExcludeIDs []string // ids to always skip
+	Discover DiscoverOptions
 }
 
 type ExecuteResult struct {
@@ -39,6 +40,7 @@ func Execute(ctx context.Context, opts ExecuteOptions) (ExecuteResult, error) {
 		Categories: opts.Category,
 		WithSize:   opts.WithSize,
 		RepoRoot:   opts.RepoRoot,
+		Discover:   opts.Discover,
 	})
 	if err != nil {
 		return ExecuteResult{}, err

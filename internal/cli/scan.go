@@ -27,6 +27,10 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	repo := &stringFlag{}
 	fs.Var(repo, "repo", "path to repository root (scan build artifacts; report-only)")
+	discoverProjects := fs.Bool("discover-projects", false, "discover dev project folders under roots and include project junk dirs")
+	discoverRoots := &stringFlag{}
+	fs.Var(discoverRoots, "discover-roots", "comma-separated roots for project discovery (default ~/Code,~/Projects,~/workspace)")
+	discoverDepth := fs.Int("discover-depth", 4, "max directory depth for project discovery")
 
 	asJSON := fs.Bool("json", false, "output as json")
 
@@ -71,6 +75,11 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 		Categories: catSet,
 		WithSize:   withSizeFlag.v,
 		RepoRoot:   repo.v,
+		Discover: clean.DiscoverOptions{
+			Enabled:  *discoverProjects,
+			Roots:    splitCSV(discoverRoots.v),
+			MaxDepth: *discoverDepth,
+		},
 	})
 	if err != nil {
 		fmt.Fprintln(errOut, err.Error())
@@ -110,6 +119,21 @@ func filterItemsByIDs(items []clean.Item, includeIDs, excludeIDs []string) []cle
 			continue
 		}
 		out = append(out, it)
+	}
+	return out
+}
+
+func splitCSV(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
 	}
 	return out
 }

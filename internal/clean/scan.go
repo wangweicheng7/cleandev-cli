@@ -15,6 +15,7 @@ type ScanOptions struct {
 	Categories map[Category]bool // nil or empty => all
 	WithSize   bool
 	RepoRoot   string // when set, additionally scan repo build artifacts (report-only)
+	Discover   DiscoverOptions
 }
 
 func BuildPlan(ctx context.Context, opts ScanOptions) (Plan, error) {
@@ -96,6 +97,19 @@ func BuildPlan(ctx context.Context, opts ScanOptions) (Plan, error) {
 		}
 		if err := addItems(repoResolved, RepoTargets(repoResolved)); err != nil {
 			return Plan{}, err
+		}
+	}
+
+	// Auto-discovered project targets.
+	if opts.Discover.Enabled {
+		projects, err := discoverProjects(ctx, home, opts.Discover)
+		if err != nil {
+			return Plan{}, err
+		}
+		for _, p := range projects {
+			if err := addItems(p.Root, projectTargets(p)); err != nil {
+				return Plan{}, err
+			}
 		}
 	}
 
