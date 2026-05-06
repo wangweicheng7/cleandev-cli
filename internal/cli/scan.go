@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -31,6 +33,7 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	discoverRoots := &stringFlag{}
 	fs.Var(discoverRoots, "discover-roots", "comma-separated roots for project discovery (default ~/Code,~/Projects,~/workspace)")
 	discoverDepth := fs.Int("discover-depth", 4, "max directory depth for project discovery")
+	discoverRefresh := fs.Bool("discover-refresh", false, "force refresh project discovery cache")
 
 	asJSON := fs.Bool("json", false, "output as json")
 
@@ -79,6 +82,7 @@ func RunScan(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 			Enabled:  *discoverProjects,
 			Roots:    splitCSV(discoverRoots.v),
 			MaxDepth: *discoverDepth,
+			Refresh:  *discoverRefresh,
 		},
 	})
 	if err != nil {
@@ -139,17 +143,38 @@ func splitCSV(s string) []string {
 }
 
 func printPlanTable(w io.Writer, plan clean.Plan) {
+	home, _ := os.UserHomeDir()
+
+	type projRow struct {
+		name string
+		path string
+		b    int64
+	}
+
 	// Collect items that actually exist on disk. This keeps output focused.
 	type row struct {
 		name string
 		b    int64
 	}
 	var rows []row
+	projMap := map[string]*projRow{}
 	var total int64
 	maxName := 0
 
 	for _, it := range plan.Items {
 		if !it.Exists || it.Skipped {
+			continue
+		}
+		if root, ok := projectRootFromID(it.ID); ok {
+			pr, exists := projMap[root]
+			if !exists {
+				pr = &projRow{
+					name: filepath.Base(root),
+					path: shortenHomePath(root, home),
+				}
+				projMap[root] = pr
+			}
+			pr.b += it.Bytes
 			continue
 		}
 		name := it.Name
@@ -165,7 +190,29 @@ func printPlanTable(w io.Writer, plan clean.Plan) {
 		}
 	}
 
+	var projRows []projRow
+	for _, pr := range projMap {
+		projRows = append(projRows, *pr)
+		if len(pr.name) > maxName {
+			maxName = len(pr.name)
+		}
+		total += pr.b
+	}
+
+	sort.SliceStable(projRows, func(i, j int) bool { return projRows[i].b > projRows[j].b })
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].b > rows[j].b })
+
+	for _, r := range projRows {
+		size := "-"
+		if r.b > 0 {
+			size = humanBytes(r.b)
+		}
+		fmt.Fprintf(w, "%-*s  %s\n", maxName, r.name, size)
+		fmt.Fprintf(w, "%s\n", r.path)
+	}
+	if len(projRows) > 0 && len(rows) > 0 {
+		fmt.Fprintln(w)
+	}
 
 	for _, r := range rows {
 		size := "-"
@@ -174,11 +221,38 @@ func printPlanTable(w io.Writer, plan clean.Plan) {
 		}
 		fmt.Fprintf(w, "%-*s  %s\n", maxName, r.name, size)
 	}
-	if len(rows) > 0 {
+	if len(rows) > 0 || len(projRows) > 0 {
 		fmt.Fprintf(w, "%s\n", strings.Repeat("-", maxName+2+12))
 		fmt.Fprintf(w, "%-*s  %s\n", maxName, "Total", humanBytes(total))
 	} else {
 		fmt.Fprintln(w, "(no matching items found)")
 	}
+}
+
+func projectRootFromID(id string) (string, bool) {
+	idx := strings.Index(id, ":")
+	if idx <= 0 {
+		return "", false
+	}
+	prefix := id[:idx]
+	if !strings.HasPrefix(prefix, "proj-") {
+		return "", false
+	}
+	return id[idx+1:], true
+}
+
+func shortenHomePath(p, home string) string {
+	if home == "" {
+		return p
+	}
+	p = filepath.Clean(p)
+	home = filepath.Clean(home)
+	if p == home {
+		return "~"
+	}
+	if strings.HasPrefix(p, home+string(filepath.Separator)) {
+		return "~" + strings.TrimPrefix(p, home)
+	}
+	return p
 }
 

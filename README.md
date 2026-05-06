@@ -75,6 +75,8 @@ source ~/.bashrc
 ```bash
 devclean scan --discover-projects --discover-roots ~/Code,~/Projects --with-size
 devclean clean --discover-projects --discover-roots ~/Code,~/Projects --dry-run
+# 强制刷新发现缓存
+devclean scan --discover-projects --discover-refresh
 ```
 
 ## 配置文件（可选）

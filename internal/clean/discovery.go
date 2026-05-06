@@ -2,20 +2,31 @@ package clean
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type DiscoverOptions struct {
 	Enabled  bool
 	Roots    []string
 	MaxDepth int
+	Refresh  bool
+	CacheTTL time.Duration
 }
 
 type discoveredProject struct {
 	Root string
 	Name string
+}
+
+type discoveryCache struct {
+	GeneratedAt time.Time          `json:"generated_at"`
+	Roots       []string           `json:"roots"`
+	MaxDepth    int                `json:"max_depth"`
+	Projects    []discoveredProject `json:"projects"`
 }
 
 func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([]discoveredProject, error) {
@@ -28,6 +39,25 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 	}
 
 	roots := normalizeDiscoverRoots(home, opts.Roots)
+	ttl := opts.CacheTTL
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+
+	if !opts.Refresh {
+		if cached, ok := loadDiscoveryCache(home, roots, maxDepth, ttl); ok {
+			// prune missing paths so cache heals itself when projects disappear
+			var alive []discoveredProject
+			for _, p := range cached {
+				if st, err := os.Stat(p.Root); err == nil && st.IsDir() {
+					alive = append(alive, p)
+				}
+			}
+			_ = saveDiscoveryCache(home, roots, maxDepth, alive)
+			return alive, nil
+		}
+	}
+
 	seen := map[string]bool{}
 	var out []discoveredProject
 
@@ -80,6 +110,7 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 		}
 	}
 
+	_ = saveDiscoveryCache(home, roots, maxDepth, out)
 	return out, nil
 }
 
@@ -202,5 +233,64 @@ func projectTargets(p discoveredProject) []Item {
 			Reason:     "CocoaPods install output, can be reinstalled",
 		},
 	}
+}
+
+func loadDiscoveryCache(home string, roots []string, maxDepth int, ttl time.Duration) ([]discoveredProject, bool) {
+	b, err := os.ReadFile(discoveryCachePath(home))
+	if err != nil {
+		return nil, false
+	}
+	var c discoveryCache
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, false
+	}
+	if c.MaxDepth != maxDepth {
+		return nil, false
+	}
+	if !sameStringSlice(c.Roots, roots) {
+		return nil, false
+	}
+	if time.Since(c.GeneratedAt) > ttl {
+		return nil, false
+	}
+	return c.Projects, true
+}
+
+func saveDiscoveryCache(home string, roots []string, maxDepth int, projects []discoveredProject) error {
+	if projects == nil {
+		projects = []discoveredProject{}
+	}
+	c := discoveryCache{
+		GeneratedAt: time.Now(),
+		Roots:       roots,
+		MaxDepth:    maxDepth,
+		Projects:    projects,
+	}
+	b, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	p := discoveryCachePath(home)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, b, 0o644)
+}
+
+func discoveryCachePath(home string) string {
+	return filepath.Join(home, ".cache", "devclean", "discovery-cache.json")
+}
+
+func sameStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 

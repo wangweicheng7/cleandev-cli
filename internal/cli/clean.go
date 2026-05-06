@@ -32,6 +32,7 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 	discoverRoots := &stringFlag{}
 	fs.Var(discoverRoots, "discover-roots", "comma-separated roots for project discovery (default ~/Code,~/Projects,~/workspace)")
 	discoverDepth := fs.Int("discover-depth", 4, "max directory depth for project discovery")
+	discoverRefresh := fs.Bool("discover-refresh", false, "force refresh project discovery cache")
 
 	dryRun := fs.Bool("dry-run", false, "preview actions without deleting")
 	confirm := fs.Bool("confirm", false, "execute deletion (required unless --dry-run)")
@@ -88,6 +89,7 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 				Enabled:  *discoverProjects,
 				Roots:    splitCSV(discoverRoots.v),
 				MaxDepth: *discoverDepth,
+				Refresh:  *discoverRefresh,
 			},
 		})
 		if err != nil {
@@ -122,6 +124,7 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 			Enabled:  *discoverProjects,
 			Roots:    splitCSV(discoverRoots.v),
 			MaxDepth: *discoverDepth,
+			Refresh:  *discoverRefresh,
 		},
 	})
 	if err != nil {
