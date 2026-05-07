@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/wangweicheng7/devclean-cli/internal/cli"
+	"github.com/wangweicheng7/devclean-cli/internal/version"
 )
 
 func main() {
@@ -19,7 +20,13 @@ func realMain() int {
 	// We keep root flags minimal; each subcommand has its own flagset.
 	root := flag.NewFlagSet("devclean", flag.ContinueOnError)
 	root.SetOutput(os.Stderr)
+	showVersion := root.Bool("version", false, "print version and exit")
+	showVersionShort := root.Bool("v", false, "print version and exit")
 	_ = root.Parse(os.Args[1:])
+	if *showVersion || *showVersionShort {
+		fmt.Fprintln(os.Stdout, version.String())
+		return 0
+	}
 
 	args := root.Args()
 	if len(args) == 0 {
@@ -31,6 +38,9 @@ func realMain() int {
 	cmdArgs := args[1:]
 
 	switch cmd {
+	case "version", "--version", "-v":
+		fmt.Fprintln(os.Stdout, version.String())
+		return 0
 	case "scan":
 		return cli.RunScan(ctx, cmdArgs, os.Stdout, os.Stderr)
 	case "plan":
@@ -51,4 +61,3 @@ func realMain() int {
 		return 2
 	}
 }
-

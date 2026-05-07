@@ -8,6 +8,11 @@ builds:
   - id: devclean
     main: ./cmd/devclean
     binary: devclean
+    ldflags:
+      - -s -w
+      - -X github.com/wangweicheng7/devclean-cli/internal/version.Version={{ .Version }}
+      - -X github.com/wangweicheng7/devclean-cli/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/wangweicheng7/devclean-cli/internal/version.Date={{ .Date }}
     env:
       - CGO_ENABLED=0
     goos:

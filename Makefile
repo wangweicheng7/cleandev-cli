@@ -11,7 +11,7 @@ test:
 	go test $(PKG)
 
 build:
-	go build -o bin/$(BINARY_NAME) ./cmd/devclean
+	go build -ldflags "-X github.com/wangweicheng7/devclean-cli/internal/version.Version=dev -X github.com/wangweicheng7/devclean-cli/internal/version.Commit=$$(git rev-parse --short HEAD 2>/dev/null || echo none) -X github.com/wangweicheng7/devclean-cli/internal/version.Date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/$(BINARY_NAME) ./cmd/devclean
 
 run:
 	go run ./cmd/devclean $(ARGS)
