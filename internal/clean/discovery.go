@@ -11,24 +11,29 @@ import (
 )
 
 type DiscoverOptions struct {
-	Enabled  bool
-	Roots    []string
-	MaxDepth int
-	Refresh  bool
-	CacheTTL time.Duration
-	Debug    bool
+	Enabled   bool
+	Roots     []string
+	MaxDepth  int
+	Refresh   bool
+	CacheTTL  time.Duration
+	Debug     bool
 	DebugLogs *[]string
 }
 
 type discoveredProject struct {
-	Root string
-	Name string
+	Root string `json:"Root"`
+	Name string `json:"Name"`
+
+	HasPackageJSON bool `json:"HasPackageJSON,omitempty"`
+	HasPubspecYAML bool `json:"HasPubspecYAML,omitempty"`
+	HasAndroidDir  bool `json:"HasAndroidDir,omitempty"`
+	HasIOSDir      bool `json:"HasIOSDir,omitempty"`
 }
 
 type discoveryCache struct {
-	GeneratedAt time.Time          `json:"generated_at"`
-	Roots       []string           `json:"roots"`
-	MaxDepth    int                `json:"max_depth"`
+	GeneratedAt time.Time           `json:"generated_at"`
+	Roots       []string            `json:"roots"`
+	MaxDepth    int                 `json:"max_depth"`
 	Projects    []discoveredProject `json:"projects"`
 }
 
@@ -106,9 +111,14 @@ func discoverProjects(ctx context.Context, home string, opts DiscoverOptions) ([
 				cleaned := filepath.Clean(path)
 				if !seen[cleaned] {
 					seen[cleaned] = true
+					feat := detectProjectFeatures(cleaned)
 					out = append(out, discoveredProject{
-						Root: cleaned,
-						Name: filepath.Base(cleaned),
+						Root:           cleaned,
+						Name:           filepath.Base(cleaned),
+						HasPackageJSON: feat.HasPackageJSON,
+						HasPubspecYAML: feat.HasPubspecYAML,
+						HasAndroidDir:  feat.HasAndroidDir,
+						HasIOSDir:      feat.HasIOSDir,
 					})
 					discoverLog(&opts, "found project: %s", cleaned)
 				}
@@ -168,20 +178,34 @@ func isProjectDir(dir string) bool {
 	return false
 }
 
+type projectFeatures struct {
+	HasPackageJSON bool
+	HasPubspecYAML bool
+	HasAndroidDir  bool
+	HasIOSDir      bool
+}
+
+func detectProjectFeatures(dir string) projectFeatures {
+	has := func(rel string) bool {
+		_, err := os.Stat(filepath.Join(dir, rel))
+		return err == nil
+	}
+	return projectFeatures{
+		HasPackageJSON: has("package.json"),
+		HasPubspecYAML: has("pubspec.yaml"),
+		HasAndroidDir:  has("android"),
+		HasIOSDir:      has("ios"),
+	}
+}
+
 func projectTargets(p discoveredProject) []Item {
 	inProject := func(rel string) string { return filepath.Join(p.Root, rel) }
 
-	return []Item{
-		{
-			ID:         "proj-node_modules:" + p.Root,
-			Name:       p.Name + " node_modules",
-			Path:       inProject("node_modules"),
-			Category:   CategoryBuild,
-			ProfileMin: ProfileDev,
-			Mode:       ModeDelete,
-			Reason:     "dependency install output, can be reinstalled",
-		},
-		{
+	var out []Item
+
+	// Common build outputs (safe-ish to delete) across many repos.
+	out = append(out,
+		Item{
 			ID:         "proj-dist:" + p.Root,
 			Name:       p.Name + " dist",
 			Path:       inProject("dist"),
@@ -190,7 +214,7 @@ func projectTargets(p discoveredProject) []Item {
 			Mode:       ModeDelete,
 			Reason:     "build output, can be regenerated",
 		},
-		{
+		Item{
 			ID:         "proj-build:" + p.Root,
 			Name:       p.Name + " build",
 			Path:       inProject("build"),
@@ -199,16 +223,7 @@ func projectTargets(p discoveredProject) []Item {
 			Mode:       ModeDelete,
 			Reason:     "build output, can be regenerated",
 		},
-		{
-			ID:         "proj-dart-tool:" + p.Root,
-			Name:       p.Name + " .dart_tool",
-			Path:       inProject(".dart_tool"),
-			Category:   CategoryBuild,
-			ProfileMin: ProfileDev,
-			Mode:       ModeDelete,
-			Reason:     "Flutter/Dart tool cache, can be regenerated",
-		},
-		{
+		Item{
 			ID:         "proj-target:" + p.Root,
 			Name:       p.Name + " target",
 			Path:       inProject("target"),
@@ -217,7 +232,7 @@ func projectTargets(p discoveredProject) []Item {
 			Mode:       ModeDelete,
 			Reason:     "Rust/Java build output, can be regenerated",
 		},
-		{
+		Item{
 			ID:         "proj-out:" + p.Root,
 			Name:       p.Name + " out",
 			Path:       inProject("out"),
@@ -226,7 +241,37 @@ func projectTargets(p discoveredProject) []Item {
 			Mode:       ModeDelete,
 			Reason:     "build output, can be regenerated",
 		},
-		{
+	)
+
+	// JS/TS projects.
+	if p.HasPackageJSON {
+		out = append(out, Item{
+			ID:         "proj-node_modules:" + p.Root,
+			Name:       p.Name + " node_modules",
+			Path:       inProject("node_modules"),
+			Category:   CategoryBuild,
+			ProfileMin: ProfileDev,
+			Mode:       ModeDelete,
+			Reason:     "dependency install output, can be reinstalled",
+		})
+	}
+
+	// Flutter/Dart projects.
+	if p.HasPubspecYAML {
+		out = append(out, Item{
+			ID:         "proj-dart-tool:" + p.Root,
+			Name:       p.Name + " .dart_tool",
+			Path:       inProject(".dart_tool"),
+			Category:   CategoryBuild,
+			ProfileMin: ProfileDev,
+			Mode:       ModeDelete,
+			Reason:     "Flutter/Dart tool cache, can be regenerated",
+		})
+	}
+
+	// Android/iOS project-specific candidates.
+	if p.HasAndroidDir {
+		out = append(out, Item{
 			ID:         "proj-android-gradle:" + p.Root,
 			Name:       p.Name + " android/.gradle",
 			Path:       inProject("android/.gradle"),
@@ -234,8 +279,10 @@ func projectTargets(p discoveredProject) []Item {
 			ProfileMin: ProfileDev,
 			Mode:       ModeDelete,
 			Reason:     "Android project-local gradle cache",
-		},
-		{
+		})
+	}
+	if p.HasIOSDir {
+		out = append(out, Item{
 			ID:         "proj-ios-pods:" + p.Root,
 			Name:       p.Name + " ios/Pods",
 			Path:       inProject("ios/Pods"),
@@ -243,8 +290,10 @@ func projectTargets(p discoveredProject) []Item {
 			ProfileMin: ProfileDev,
 			Mode:       ModeDelete,
 			Reason:     "CocoaPods install output, can be reinstalled",
-		},
+		})
 	}
+
+	return out
 }
 
 func loadDiscoveryCache(home string, roots []string, maxDepth int, ttl time.Duration) ([]discoveredProject, bool) {
@@ -312,4 +361,3 @@ func discoverLog(opts *DiscoverOptions, format string, args ...interface{}) {
 	}
 	*opts.DebugLogs = append(*opts.DebugLogs, fmt.Sprintf(format, args...))
 }
-
