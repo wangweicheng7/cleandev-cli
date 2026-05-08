@@ -92,10 +92,9 @@ func DefaultTargets(home string) []Item {
 			Path:       h("~/Library/Developer/Xcode/DerivedData"),
 			Category:   CategoryBuild,
 			ProfileMin: ProfileDev,
-			Mode:       ModeReportOnly,
-			Reason:     "large but can impact Xcode state; report-only by default",
-			Warnings:   []string{"report-only (high impact)"},
-			ReportOnly: true,
+			Mode:       ModeDelete,
+			Reason:     "large rebuildable build artifacts; deleting may trigger Xcode reindex/rebuild",
+			Warnings:   []string{"high impact (Xcode will rebuild)"},
 		},
 		{
 			ID:         "xcode-archives",

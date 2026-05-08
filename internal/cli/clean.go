@@ -130,9 +130,13 @@ func RunClean(ctx context.Context, args []string, out io.Writer, errOut io.Write
 		selectedIDs = ids
 	}
 
+	// In interactive mode, user's per-item Y/N is already an explicit authorization,
+	// so we don't require a separate `--confirm` flag.
+	confirmForExecute := *confirm || *interactive
+
 	res, err := clean.Execute(ctx, clean.ExecuteOptions{
 		DryRun:          *dryRun,
-		Confirm:         *confirm,
+		Confirm:         confirmForExecute,
 		Profile:         p,
 		Category:        catSet,
 		WithSize:        withSizeFlag.v,
@@ -209,7 +213,11 @@ func chooseInteractive(plan clean.Plan, allowReportOnly bool, out io.Writer, err
 		if it.Bytes > 0 {
 			size = fmt.Sprintf(" (%s)", humanBytes(it.Bytes))
 		}
-		fmt.Fprintf(out, "clean item? %s%s [y/N]: ", it.Name, size)
+		path := it.ResolvedAbs
+		if path == "" {
+			path = it.Path
+		}
+		fmt.Fprintf(out, "clean item? %s%s\n  path: %s\n[y/N]: ", it.Name, size, path)
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return nil, err

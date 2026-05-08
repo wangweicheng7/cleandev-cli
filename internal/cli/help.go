@@ -22,7 +22,7 @@ Usage:
   devclean doctor
 
 Notes:
-  - clean requires either --dry-run (preview) or --confirm (execute). If both are set, dry-run wins.
+  - clean requires either --dry-run (preview) or --confirm (execute). When using --interactive, per-item Y/N authorization is enough to execute.
   - aggressive profile may include report-only items (not deleted).
   - config lookup: ./%s then ~/%s
 `, config.DefaultConfigFilename, config.DefaultConfigFilename)
